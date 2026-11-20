@@ -14,11 +14,11 @@
     return "其他";
   }
   function attr(line, key) {
-    const match = line.match(new RegExp("(?:^|\\\\s)" + key + '="([^"]*)"'));
+    const match = line.match(new RegExp("(?:^|\\s)" + key + '="([^"]*)"'));
     return match ? match[1] : "";
   }
   function parseM3U(text) {
-    const lines = text.replace(/^\\uFEFF/, "").split(/\\r?\\n/);
+    const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
     const result = [];
     let pending = null;
     for (const raw of lines) {
@@ -185,7 +185,7 @@
   });
   $("savePlaylistBtn").addEventListener("click", () => {
     const url = $("playlistUrl").value.trim();
-    if (!/^https?:\\/\\//i.test(url)) { setNotice("請輸入有效的 http 或 https M3U 網址。"); return; }
+    if (!/^https?:\/\//i.test(url)) { setNotice("請輸入有效的 http 或 https M3U 網址。"); return; }
     loadPlaylist(url);
   });
   $("resetPlaylistBtn").addEventListener("click", () => {
