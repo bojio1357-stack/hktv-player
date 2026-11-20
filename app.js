@@ -106,39 +106,155 @@
       setNotice(`載入失敗：${error.message}。可能是網絡、CORS 或清單網址問題。你可以稍後重試，或換用可公開讀取的 M3U 網址。`);
     }
   }
+  function sourceCandidates(channel) {
+    const isJade = /(^|[\s_-])(jade|翡翠台|翡翠)([\s_-]|$)/i.test(channel.name) ||
+      /Jade\.hk/i.test(channel.id);
+    if (!isJade) return [channel.url];
+
+    // Ordered by preference. These are public stream endpoints found in
+    // community IPTV listings; availability can change without notice.
+    const candidates = [
+      "https://edge6a.v2h-cdn.com/jade/jade.stream/chunklist.m3u8",
+      channel.url,
+      "http://103.172.187.30:12000/stream/mytv/tvb/master.m3u8"
+    ];
+    return [...new Set(candidates)];
+  }
+
+  let playAttemptToken = 0;
+  let attemptTimer = null;
+
+  function clearAttemptTimer() {
+    if (attemptTimer) {
+      clearTimeout(attemptTimer);
+      attemptTimer = null;
+    }
+  }
+
   async function playChannel(channel) {
+    const token = ++playAttemptToken;
+    const sources = sourceCandidates(channel);
+    let sourceIndex = 0;
+
     $("nowTitle").textContent = channel.name;
-    $("playerStatus").textContent = "CONNECTING";
     $("videoPlaceholder").classList.add("hidden");
+    $("playerStatus").textContent = "CONNECTING";
+    $("playerMessage").textContent = sources.length > 1
+      ? `正在连接直播源（1/${sources.length}），失败时会自动切换备用源。`
+      : "正在连接直播源…";
+
     if (state.hls) { state.hls.destroy(); state.hls = null; }
+    clearAttemptTimer();
     video.pause();
     video.removeAttribute("src");
     video.load();
-    const url = channel.url;
-    try {
+
+    const failOrNext = (reason) => {
+      if (token !== playAttemptToken) return;
+      clearAttemptTimer();
+      if (state.hls) { state.hls.destroy(); state.hls = null; }
+
+      sourceIndex += 1;
+      if (sourceIndex < sources.length) {
+        $("playerStatus").textContent = "RETRYING";
+        $("playerMessage").textContent =
+          `第 ${sourceIndex} 個來源無法播放，正在嘗試備用源（${sourceIndex + 1}/${sources.length}）…`;
+        trySource();
+      } else {
+        $("playerStatus").textContent = "UNAVAILABLE";
+        $("playerMessage").textContent =
+          `已測試 ${sources.length} 個直播來源，仍無法播放。${reason || "來源可能已失效、被網絡阻擋或有地區限制。"}請稍後重試。`;
+        $("videoPlaceholder").classList.remove("hidden");
+      }
+    };
+
+    const trySource = async () => {
+      if (token !== playAttemptToken) return;
+      clearAttemptTimer();
+      if (state.hls) { state.hls.destroy(); state.hls = null; }
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+
+      const url = sources[sourceIndex];
+      $("playerStatus").textContent = "CONNECTING";
+      $("playerMessage").textContent =
+        sources.length > 1
+          ? `正在測試直播源（${sourceIndex + 1}/${sources.length}）…`
+          : "正在連接直播源…";
+
+      let settled = false;
+      const cleanup = () => {
+        video.removeEventListener("playing", onPlaying);
+        video.removeEventListener("error", onError);
+      };
+      const onPlaying = () => {
+        if (settled || token !== playAttemptToken) return;
+        settled = true;
+        clearAttemptTimer();
+        cleanup();
+        $("playerStatus").textContent = "LIVE";
+        $("playerMessage").textContent = `播放中 · 來源 ${sourceIndex + 1}/${sources.length}`;
+      };
+      const onError = () => {
+        if (settled || token !== playAttemptToken) return;
+        settled = true;
+        cleanup();
+        failOrNext("播放器回報串流錯誤。");
+      };
+
+      video.addEventListener("playing", onPlaying, { once: true });
+      video.addEventListener("error", onError, { once: true });
+
+      // Native HLS is preferred on iPad/iPhone Safari.
       if (video.canPlayType("application/vnd.apple.mpegurl")) {
         video.src = url;
+        video.load();
       } else if (window.Hls && Hls.isSupported()) {
-        state.hls = new Hls({ enableWorker: true });
-        state.hls.loadSource(url);
+        state.hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: false,
+          manifestLoadingTimeOut: 12000,
+          levelLoadingTimeOut: 12000,
+          fragLoadingTimeOut: 20000
+        });
         state.hls.attachMedia(video);
+        state.hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+          if (token === playAttemptToken) state.hls.loadSource(url);
+        });
         state.hls.on(Hls.Events.ERROR, (_, data) => {
-          if (data.fatal) {
-            $("playerStatus").textContent = "PLAYBACK ERROR";
-            $("playerMessage").textContent = "此串流無法播放，可能不支援、已失效或有地區限制。";
+          if (data.fatal && !settled && token === playAttemptToken) {
+            settled = true;
+            cleanup();
+            failOrNext(data.details || "HLS 串流錯誤。");
           }
         });
       } else {
-        throw new Error("此瀏覽器不支援該串流格式");
+        settled = true;
+        cleanup();
+        failOrNext("此瀏覽器不支援此串流格式。");
+        return;
       }
-      await video.play();
-      $("playerStatus").textContent = "LIVE";
-      $("playerMessage").textContent = "正在嘗試播放。若畫面沒有出現，該來源可能不可用或不支援此裝置。";
-    } catch (error) {
-      $("playerStatus").textContent = "UNAVAILABLE";
-      $("playerMessage").textContent = `無法開始播放：${error.message}。請嘗試其他頻道。`;
-      $("videoPlaceholder").classList.remove("hidden");
-    }
+
+      attemptTimer = setTimeout(() => {
+        if (settled || token !== playAttemptToken) return;
+        settled = true;
+        cleanup();
+        failOrNext("連線逾時。");
+      }, 15000);
+
+      try {
+        await video.play();
+      } catch (error) {
+        if (!settled && token === playAttemptToken) {
+          settled = true;
+          cleanup();
+          failOrNext(error.message || "無法開始播放。");
+        }
+      }
+    };
+
+    trySource();
   }
   $("categoryTabs").addEventListener("click", e => {
     const button = e.target.closest("[data-category]");
