@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080d18">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HKTV Player">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <title>HKTV Player</title>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="HKTV Player home">
+        <span class="brand-mark"><span></span><span></span><span></span></span>
+        <span>HKTV <b>PLAYER</b></span>
+      </a>
+      <div class="top-actions">
+        <button id="refreshBtn" class="icon-button" aria-label="Refresh channels" title="Refresh">↻</button>
+        <button id="settingsBtn" class="icon-button" aria-label="Playlist settings" title="Playlist settings">⚙</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow"><span class="live-dot"></span> HONG KONG TELEVISION</div>
+          <h1>香港電視直播</h1>
+          <p>Live channels, wherever you are.</p>
+          <div class="hero-meta"><span id="channelCount">載入頻道中…</span><span class="meta-separator">·</span><span>iPad ready</span></div>
+        </div>
+        <div class="hero-orb" aria-hidden="true"><div class="orb-ring"></div><div class="orb-core">HK</div></div>
+      </section>
+
+      <section class="player-section">
+        <div class="section-heading">
+          <div><span class="section-kicker">NOW PLAYING</span><h2 id="nowTitle">選擇一個頻道</h2></div>
+          <span id="playerStatus" class="status-pill">READY</span>
+        </div>
+        <div class="video-frame">
+          <video id="video" controls playsinline webkit-playsinline></video>
+          <div id="videoPlaceholder" class="video-placeholder">
+            <div class="play-symbol">▶</div>
+            <strong>選擇頻道開始播放</strong>
+            <span>直播可用性取決於來源及所在地區</span>
+          </div>
+        </div>
+        <p id="playerMessage" class="player-message">提示：部分串流可能因地區限制、格式或授權而無法播放。</p>
+      </section>
+
+      <section class="channels-section">
+        <div class="section-heading channels-heading">
+          <div><span class="section-kicker">DISCOVER</span><h2>頻道</h2></div>
+          <button id="favoritesToggle" class="soft-button">☆ 我的收藏</button>
+        </div>
+        <label class="search-box"><span>⌕</span><input id="searchInput" type="search" placeholder="搜尋香港頻道…" autocomplete="off"></label>
+        <nav id="categoryTabs" class="category-tabs" aria-label="Channel categories"></nav>
+        <div id="notice" class="notice" hidden></div>
+        <div id="channelGrid" class="channel-grid"></div>
+        <button id="loadMoreBtn" class="load-more" hidden>載入更多</button>
+      </section>
+    </main>
+
+    <footer><span>HKTV PLAYER</span><span>Personal web player · v2.0</span></footer>
+  </div>
+
+  <dialog id="settingsDialog" class="settings-dialog">
+    <form method="dialog" class="dialog-top"><div><span class="section-kicker">SETTINGS</span><h2>播放清單</h2></div><button class="icon-button" aria-label="Close">×</button></form>
+    <p class="dialog-copy">預設使用 iptv-org 公開香港清單。你也可以貼上自己有權使用的 M3U / M3U8 清單網址。</p>
+    <label class="field-label" for="playlistUrl">M3U URL</label>
+    <input id="playlistUrl" class="url-input" type="url" spellcheck="false">
+    <div class="dialog-actions"><button id="resetPlaylistBtn" class="soft-button" type="button">恢復預設</button><button id="savePlaylistBtn" class="primary-button" type="button">載入清單</button></div>
+    <p class="fine-print">只載入你有權觀看的串流。公開清單不代表每個來源都獲得轉播授權。</p>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
